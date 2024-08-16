@@ -18,7 +18,8 @@
     </div>
 
     <div class="bg-white border border-alpha-black-200 rounded-xl shadow-xs divide-y divide-alpha-black-200">
-      <% @import.csv.table.each_with_index do |row, row_index| %>
+      <% csv = @import.csv %>
+      <% csv.table[0...100].each_with_index do |row, row_index| %>
         <div
           class="grid divide-x divide-alpha-black-200"
           style="grid-template-columns: repeat(<%= @import.expected_fields.size %>, 1fr);">
@@ -32,7 +33,7 @@
                 <%= ff.hidden_field :col_idx, value: col_index %>
                 <%= ff.text_field :value, value: value,
                                   id: "cell-#{row_index}-#{col_index}",
-                                  class: "#{@import.csv.cell_valid?(row_index, col_index) ? "focus:border-transparent border-transparent" : "border-red-500"} border px-4 py-3.5 text-sm w-full bg-transparent focus:ring-gray-900 focus:ring-2 focus-visible:outline-none #{table_corner_class(row_index, col_index, @import.csv.table, row.fields)}",
+                                  class: "#{csv.cell_valid?(row_index, col_index) ? "focus:border-transparent border-transparent" : "border-red-500"} border px-4 py-3.5 text-sm w-full bg-transparent focus:ring-gray-900 focus:ring-2 focus-visible:outline-none #{table_corner_class(row_index, col_index, csv.table, row.fields)}",
                                   data: { "auto-submit-form-target" => "auto" } %>
               <% end %>
             <% end %>

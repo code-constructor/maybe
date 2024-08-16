@@ -10,6 +10,9 @@
       </div>
     </label>
   </div>
+
+  <%= form.collection_select :col_sep, Import::COL_SEP_WHITELIST, :to_s, :to_s, { prompt: t(".select_col_sep"), label: t(".col_sep") } %>
+
   <%= form.submit t(".next"), class: "px-4 py-2 mb-4 block w-full rounded-lg bg-alpha-black-25 text-gray text-sm font-medium", data: { csv_upload_target: "submit", turbo_confirm: (@import.raw_csv_str? ? { title: t(".confirm_title"), body: t(".confirm_body"), accept: t(".confirm_accept") } : nil) } %>
 <% end %>
 

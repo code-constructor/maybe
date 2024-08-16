@@ -72,6 +72,10 @@ class TransactionsController < ApplicationController
 
   private
 
+    def default_url_options
+      { q: search_params }
+    end
+
     def amount
       if nature.income?
         transaction_entry_params[:amount].to_d * -1

@@ -61,6 +61,7 @@ group :development do
   gem "ruby-lsp-rails"
   gem "web-console"
   gem "faker"
+  gem "rails-erd"
 end
 
 group :test do
@@ -71,4 +72,5 @@ group :test do
   gem "webmock"
   gem "climate_control"
   gem "simplecov", require: false
+  gem "shoulda-matchers", "~> 6.0"
 end

@@ -1,7 +1,10 @@
 class Import < ApplicationRecord
+  COL_SEP_WHITELIST = [ Csv::DEFAULT_COL_SEP, ";" ].freeze
+
   belongs_to :account
 
   validate :raw_csv_must_be_parsable
+  validates :col_sep, inclusion: { in: COL_SEP_WHITELIST }, allow_nil: true
 
   before_save :initialize_csv, if: :should_initialize_csv?
 
@@ -10,6 +13,10 @@ class Import < ApplicationRecord
   store_accessor :column_mappings, :define_column_mapping_keys
 
   scope :ordered, -> { order(created_at: :desc) }
+
+  after_initialize do
+    self.col_sep ||= COL_SEP_WHITELIST
+  end
 
   FALLBACK_TRANSACTION_NAME = "Imported transaction"
 
@@ -43,7 +50,7 @@ class Import < ApplicationRecord
 
   def update_csv!(row_idx:, col_idx:, value:)
     updated_csv = csv.update_cell(row_idx.to_i, col_idx.to_i, value)
-    update! normalized_csv_str: updated_csv.to_s
+    update! normalized_csv_str: updated_csv.to_s(col_sep:)
   end
 
   # Type-specific methods (potential STI inheritance in future when more import types added)
@@ -77,9 +84,10 @@ class Import < ApplicationRecord
     def get_normalized_csv_with_validation
       return nil if normalized_csv_str.nil?
 
-      csv = Import::Csv.new(normalized_csv_str)
+      csv = Import::Csv.new(normalized_csv_str, col_sep:)
 
       expected_fields.each do |field|
+        csv.define_preprocessor(field.key, field.preprocessor) if field.preprocessor
         csv.define_validator(field.key, field.validator) if field.validator
       end
 
@@ -88,7 +96,7 @@ class Import < ApplicationRecord
 
     def get_raw_csv
       return nil if raw_csv_str.nil?
-      Import::Csv.new(raw_csv_str)
+      Import::Csv.new(raw_csv_str, col_sep:)
     end
 
     def should_initialize_csv?
@@ -97,17 +105,22 @@ class Import < ApplicationRecord
 
     def initialize_csv
       generated_csv = generate_normalized_csv(raw_csv_str)
-      self.normalized_csv_str = generated_csv.table.to_s
+
+      expected_fields.each do |field|
+        generated_csv.define_preprocessor(field.key, field.preprocessor) if field.preprocessor
+      end
+
+      self.normalized_csv_str = generated_csv.table.to_s(col_sep:)
     end
 
     # Uses the user-provided raw CSV + mappings to generate a normalized CSV for the import
     def generate_normalized_csv(csv_str)
-      Import::Csv.create_with_field_mappings(csv_str, expected_fields, column_mappings)
+      Import::Csv.create_with_field_mappings(csv_str, col_sep, expected_fields, column_mappings)
     end
 
     def update_csv(row_idx, col_idx, value)
       updated_csv = csv.update_cell(row_idx.to_i, col_idx.to_i, value)
-      update! normalized_csv_str: updated_csv.to_s
+      update! normalized_csv_str: updated_csv.to_s(col_sep:)
     end
 
     def generate_transactions
@@ -128,7 +141,7 @@ class Import < ApplicationRecord
 
         entry = account.entries.build \
           name: row["name"].presence || FALLBACK_TRANSACTION_NAME,
-          date: Date.iso8601(row["date"]),
+          date: Date.parse(row["date"]),
           currency: account.currency,
           amount: BigDecimal(row["amount"]) * -1,
           entryable: Account::Transaction.new(category: category, tags: tags)
@@ -163,6 +176,7 @@ class Import < ApplicationRecord
       amount_field = Import::Field.new \
         key: "amount",
         label: "Amount",
+        preprocessor: ->(value) { Import::Field.bigdecimal_preprocessor(value) },
         validator: ->(value) { Import::Field.bigdecimal_validator(value) }
 
       [ date_field, name_field, category_field, tags_field, amount_field ]
@@ -176,7 +190,7 @@ class Import < ApplicationRecord
 
     def raw_csv_must_be_parsable
       begin
-        CSV.parse(raw_csv_str || "")
+        CSV.parse(raw_csv_str || "", col_sep:)
       rescue CSV::MalformedCSVError
         # i18n-tasks-use t('activerecord.errors.models.import.attributes.raw_csv_str.invalid_csv_format')
         errors.add(:raw_csv_str, :invalid_csv_format)
